@@ -3,7 +3,7 @@
   "name": "colab-mcp bridge",
   "version": "1.0",
   "description": "Lets Claude run and read Colab cells via local MCP server",
-  "permissions": ["tabs", "scripting"],
+  "permissions": ["tabs", "scripting", "alarms"],
   "host_permissions": [
     "https://colab.research.google.com/*",
     "http://localhost:7823/*"

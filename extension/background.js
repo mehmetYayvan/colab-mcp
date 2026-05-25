@@ -13,7 +13,7 @@ async function poll() {
     cmd = await r.json();
     if(!cmd) return;
   } catch(e) {
-    return; // bridge server not running
+    return;
   }
 
   const tab = await getColabTab();
@@ -23,10 +23,7 @@ async function poll() {
   }
 
   try {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['content.js']
-    });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
   } catch(e) {}
 
   chrome.tabs.sendMessage(tab.id, cmd, async (result) => {
@@ -48,4 +45,17 @@ async function postResult(data) {
   } catch(e) {}
 }
 
-setInterval(poll, 600);
+// alarms fire every minute minimum, so we chain polls via recursive setTimeout
+// keeping the service worker alive with a keepAlive alarm
+chrome.alarms.create('keepAlive', { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener(() => poll());
+
+// fast polling loop — re-registers itself to keep worker alive
+async function fastPoll() {
+  await poll();
+  setTimeout(fastPoll, 700);
+}
+
+chrome.runtime.onStartup.addListener(fastPoll);
+chrome.runtime.onInstalled.addListener(fastPoll);
+fastPoll();
