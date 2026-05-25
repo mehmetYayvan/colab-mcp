@@ -1,11 +1,16 @@
 """
 colab-mcp: MCP server for reading/writing Google Colab notebooks via Drive API.
-Phase 1 — file-level operations (no live kernel).
-Phase 2 — Chrome extension bridge for live cell execution (planned).
+Phase 1 — file-level operations (Drive API).
+Phase 2 — Chrome extension bridge for live cell execution.
 """
 
+import asyncio
 import json
 import os
+import queue
+import threading
+import uuid
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +26,68 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp import types
 
+# --- Chrome extension bridge (Phase 2) ---
+BRIDGE_PORT = 7823
+_cmd_queue: queue.Queue = queue.Queue()
+_pending: dict[str, threading.Event] = {}
+_results: dict[str, dict] = {}
+
+
+class _BridgeHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/poll':
+            try:
+                cmd = _cmd_queue.get_nowait()
+                self._send(200, cmd)
+            except queue.Empty:
+                self._send(200, None)
+        else:
+            self._send(404, {'error': 'not found'})
+
+    def do_POST(self):
+        length = int(self.headers.get('Content-Length', 0))
+        data = json.loads(self.rfile.read(length))
+        cmd_id = data.get('id')
+        if cmd_id and cmd_id in _pending:
+            _results[cmd_id] = data
+            _pending[cmd_id].set()
+        self._send(200, {'ok': True})
+
+    def _send(self, code, obj):
+        body = json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(body))
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+def _start_bridge():
+    HTTPServer(('localhost', BRIDGE_PORT), _BridgeHandler).serve_forever()
+
+
+threading.Thread(target=_start_bridge, daemon=True).start()
+
+
+async def _bridge_call(cmd: dict, timeout: int = 300) -> dict:
+    cmd_id = str(uuid.uuid4())
+    cmd['id'] = cmd_id
+    event = threading.Event()
+    _pending[cmd_id] = event
+    _cmd_queue.put(cmd)
+    loop = asyncio.get_event_loop()
+    ok = await loop.run_in_executor(None, lambda: event.wait(timeout))
+    _pending.pop(cmd_id, None)
+    if not ok:
+        return {'error': f'no response from extension after {timeout}s — is the extension installed and a Colab tab open?'}
+    return _results.pop(cmd_id, {'error': 'no result'})
+
+
+# --- Drive / notebook helpers ---
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 TOKEN_PATH = Path("~/.colab_mcp_token.json").expanduser()
 CREDS_PATH = Path("credentials.json")
@@ -130,6 +197,21 @@ async def list_tools() -> list[types.Tool]:
                 "to_index": {"type": "integer"}
             }},
         ),
+        types.Tool(
+            name="run_cell",
+            description="execute a cell in the open Colab tab and return its output (requires Chrome extension)",
+            inputSchema={"type": "object", "required": ["index"], "properties": {
+                "index": {"type": "integer"},
+                "timeout": {"type": "integer", "description": "seconds to wait for output, default 300"}
+            }},
+        ),
+        types.Tool(
+            name="get_output",
+            description="get the current output of a cell without running it (requires Chrome extension)",
+            inputSchema={"type": "object", "required": ["index"], "properties": {
+                "index": {"type": "integer"}
+            }},
+        ),
     ]
 
 
@@ -193,6 +275,24 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
         nb.cells.insert(arguments["to_index"], cell)
         upload_notebook(service, arguments["file_id"], nb)
         return [types.TextContent(type="text", text=f"cell moved {arguments['from_index']} -> {arguments['to_index']}")]
+
+    if name == "run_cell":
+        result = await _bridge_call(
+            {'cmd': 'run_cell', 'index': arguments['index']},
+            timeout=arguments.get('timeout', 300)
+        )
+        if 'error' in result:
+            return [types.TextContent(type="text", text=f"error: {result['error']}")]
+        text = result.get('output', '(no output)')
+        if 'warning' in result:
+            text += f"\n[warning: {result['warning']}]"
+        return [types.TextContent(type="text", text=text)]
+
+    if name == "get_output":
+        result = await _bridge_call({'cmd': 'get_output', 'index': arguments['index']}, timeout=10)
+        if 'error' in result:
+            return [types.TextContent(type="text", text=f"error: {result['error']}")]
+        return [types.TextContent(type="text", text=result.get('output', '(no output)'))]
 
     return [types.TextContent(type="text", text=f"unknown tool: {name}")]
 
