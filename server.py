@@ -121,9 +121,7 @@ def download_notebook(service, file_id: str) -> nbformat.NotebookNode:
 
 
 def upload_notebook(service, file_id: str, nb: nbformat.NotebookNode):
-    buf = io.BytesIO()
-    nbformat.write(nb, io.TextIOWrapper(buf, encoding="utf-8"))
-    buf.seek(0)
+    buf = io.BytesIO(nbformat.writes(nb).encode("utf-8"))
     media = MediaIoBaseUpload(buf, mimetype="application/json")
     service.files().update(fileId=file_id, media_body=media).execute()
 
