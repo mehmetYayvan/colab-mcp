@@ -9,10 +9,13 @@ async function poll() {
   let cmd;
   try {
     const r = await fetch(`${BASE}/poll`);
+    console.log('[colab-mcp] poll status:', r.status);
     if(!r.ok) return;
     cmd = await r.json();
+    console.log('[colab-mcp] poll result:', cmd);
     if(!cmd) return;
   } catch(e) {
+    console.warn('[colab-mcp] poll error:', e.message);
     return;
   }
 

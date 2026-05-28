@@ -34,6 +34,9 @@ _results: dict[str, dict] = {}
 
 
 class _BridgeHandler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self._send(204, None)
+
     def do_GET(self):
         if self.path == '/poll':
             try:
@@ -54,13 +57,19 @@ class _BridgeHandler(BaseHTTPRequestHandler):
         self._send(200, {'ok': True})
 
     def _send(self, code, obj):
-        body = json.dumps(obj).encode()
         self.send_response(code)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', len(body))
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
-        self.wfile.write(body)
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Private-Network', 'true')
+        if obj is not None:
+            body = json.dumps(obj).encode()
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', len(body))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.end_headers()
 
     def log_message(self, *args):
         pass
