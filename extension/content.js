@@ -10,13 +10,7 @@ function getOutputText(cellEl) {
 }
 
 function isRunning(cellEl) {
-  // colab marks executing cells with a progress indicator
-  return !!(
-    cellEl.querySelector('.progress-bar') ||
-    cellEl.querySelector('paper-progress') ||
-    cellEl.classList.contains('running') ||
-    cellEl.querySelector('[data-execution-count="*"]')
-  );
+  return cellEl.classList.contains('pending') || cellEl.classList.contains('running');
 }
 
 function runCell(index) {
