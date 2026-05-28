@@ -5,6 +5,8 @@ function getCells() {
 }
 
 function getOutputText(cellEl) {
+  const content = cellEl.querySelector('.output-content');
+  if(content) return content.innerText.trim();
   const out = cellEl.querySelector('.output');
   return out ? out.innerText.trim() : '';
 }
