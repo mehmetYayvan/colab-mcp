@@ -1,13 +1,18 @@
 {
   "manifest_version": 3,
-  "name": "colab-mcp bridge",
-  "version": "1.0",
-  "description": "Lets Claude run and read Colab cells via local MCP server",
+  "name": "colab-mcp",
+  "version": "1.0.0",
+  "description": "Bridge between Claude Code and Google Colab. Run cells, read outputs, edit notebooks — without copy-pasting.",
   "permissions": ["tabs", "scripting", "alarms"],
   "host_permissions": [
     "https://colab.research.google.com/*",
     "http://localhost:7823/*"
   ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "background": {
     "service_worker": "background.js"
   },

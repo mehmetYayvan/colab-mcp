@@ -1,3 +1,4 @@
+.mcp.json
 __pycache__/
 *.pyc
 .venv/
@@ -7,3 +8,4 @@ credentials.json
 .env
 *.egg-info/
 dist/
+.DS_Store
