@@ -15,6 +15,12 @@ function isRunning(cellEl) {
   return cellEl.classList.contains('pending') || cellEl.classList.contains('running');
 }
 
+function getRuntimeStatus() {
+  const btn = document.querySelector('colab-connect-button');
+  const inner = btn?.shadowRoot?.querySelector('#connect');
+  return inner ? inner.textContent.trim() : 'unknown';
+}
+
 function runCell(index) {
   return new Promise((resolve) => {
     const cells = getCells();
@@ -54,7 +60,12 @@ function runCell(index) {
         clearInterval(iv);
         const output = getOutputText(cell);
         const result = { output };
-        if(elapsed >= TIMEOUT) result.warning = 'timed out after 5 min';
+        if(elapsed >= TIMEOUT) {
+          const status = getRuntimeStatus();
+          result.warning = /connect/i.test(status) && !/connected/i.test(status)
+            ? `timed out after 5 min — runtime status: "${status}" (not connected to a runtime?)`
+            : 'timed out after 5 min';
+        }
         resolve(result);
       }
     }, POLL);
