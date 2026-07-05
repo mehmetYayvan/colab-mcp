@@ -10,7 +10,7 @@ import os
 import queue
 import threading
 import uuid
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,8 @@ _results: dict[str, dict] = {}
 
 
 class _BridgeHandler(BaseHTTPRequestHandler):
+    timeout = 10
+
     def do_OPTIONS(self):
         self._send(204, None)
 
@@ -76,7 +78,9 @@ class _BridgeHandler(BaseHTTPRequestHandler):
 
 
 def _start_bridge():
-    HTTPServer(('localhost', BRIDGE_PORT), _BridgeHandler).serve_forever()
+    server = ThreadingHTTPServer(('localhost', BRIDGE_PORT), _BridgeHandler)
+    server.daemon_threads = True
+    server.serve_forever()
 
 
 threading.Thread(target=_start_bridge, daemon=True).start()
